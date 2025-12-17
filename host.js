@@ -1,4 +1,4 @@
-/* Version: #4 */
+/* Version: #7 */
 // === KONFIGURASJON & TILSTAND ===
 let peer = null;
 let myRoomId = null;
@@ -214,13 +214,15 @@ async function callGeminiApi(contextText) {
         return;
     }
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`;
+    // ENDRET: Bruker 'gemini-1.5-flash' som er mer stabil for gratis-APIet og raskere.
+    const modelName = "gemini-1.5-flash"; 
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
     
     // Bygg historikk for kontekst
     let promptHistory = narrativeHistory.join("\n");
     
     const systemInstruction = `
-        Du er Game Master for et rollespill med en gruppe tenåringer (15-16 år). 
+        Du er Game Master for et rollespill med en gruppe elever (10. klasse). 
         Svar ALLTID med gyldig JSON. Ingen markdown formatting (som \`\`\`json).
         
         Formatet SKAL være:
@@ -242,7 +244,7 @@ async function callGeminiApi(contextText) {
         ${promptHistory ? "Tidligere hendelser:\n" + promptHistory : ""}
         
         Nåværende instruks/handling fra GM: 
-        ${contextText || "Start et nytt, spennende sci-fi eller fantasy scenario."}
+        ${contextText || "Start et nytt, spennende scenario."}
         
         Generer neste scene og valg.
     `;
@@ -254,7 +256,7 @@ async function callGeminiApi(contextText) {
     };
 
     try {
-        log("Sender forespørsel til Gemini...");
+        log(`Sender forespørsel til Gemini (${modelName})...`);
         ui.btnGenerate.disabled = true;
         ui.btnGenerate.textContent = "Tenker...";
         
@@ -425,6 +427,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.btnLockVoting.addEventListener('click', lockVoting);
     }
     
-    log("host.js initialisert.");
+    log("host.js initialisert (v7).");
 });
-/* Version: #4 */
+/* Version: #7 */
