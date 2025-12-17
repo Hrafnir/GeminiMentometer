@@ -1,9 +1,9 @@
-/* Version: #6 */
+/* Version: #7 */
 // === KONFIGURASJON & TILSTAND ===
 let peer = null;
 let conn = null;
 let myPlayerName = "";
-let currentScenarioId = null; // For å unngå dobbeltstemmer (valgfritt, men lurt)
+let lastScenarioId = null; 
 
 // === DOM ELEMENTER ===
 const ui = {
@@ -84,7 +84,6 @@ function joinGame() {
     ui.btnJoin.textContent = "Kobler til...";
     setStatus('connecting');
 
-    // Vi trenger ikke en spesifikk ID for klienten, så vi lar PeerJS generere en.
     peer = new Peer({
         debug: 1
     });
@@ -104,7 +103,6 @@ function joinGame() {
 function connectToHost(hostId) {
     log(`Prøver å koble til Host: ${hostId}...`);
     
-    // Vi sender med navnet i metadata med en gang
     conn = peer.connect(hostId, {
         metadata: { name: myPlayerName },
         serialization: 'json'
@@ -121,23 +119,16 @@ function connectToHost(hostId) {
     });
 
     conn.on('close', () => {
-        log("Host koblet fra (eller forbindelsen brutt).", 'error');
+        log("Host koblet fra.", 'error');
         setStatus('disconnected');
         alert("Mistet kontakten med Host.");
         showPanel('login');
         resetLogin();
     });
     
-    conn.on('error', (err) => {
-        log(`Connection Error: ${err}`, 'error');
-    });
-    
-    // Timeout-hack: Hvis 'open' ikke fyres av innen 5 sekunder, anta feil ID
     setTimeout(() => {
         if (!conn.open) {
-            log("Tidsavbrudd ved tilkobling. Sjekk romkoden.", 'error');
-            // Vi lukker ikke automatisk her, for noen ganger tar WebRTC tid, 
-            // men vi gir brukeren beskjed i loggen.
+            log("Tidsavbrudd. Sjekk romkode.", 'error');
         }
     }, 5000);
 }
@@ -160,8 +151,6 @@ function handleDataFromHost(msg) {
     if (msg.type === 'SCENARIO') {
         renderScenario(msg.data);
     } else if (msg.type === 'VOTE_LOCKED') {
-        // Deaktiver knapper hvis vi vil være strenge, 
-        // men host.js ignorerer sene stemmer uansett.
         disableVotingButtons();
         ui.voteStatus.textContent = "Stemming avsluttet";
         ui.voteStatus.style.opacity = 1;
@@ -169,10 +158,9 @@ function handleDataFromHost(msg) {
 }
 
 function renderScenario(scenario) {
-    // Vis spillpanelet
     showPanel('game');
     
-    // Nullstill UI
+    // Nullstill
     ui.choicesContainer.innerHTML = '';
     ui.voteStatus.style.opacity = 0;
     
@@ -184,12 +172,24 @@ function renderScenario(scenario) {
         scenario.choices.forEach(choice => {
             const btn = document.createElement('button');
             btn.className = 'btn choice-btn';
-            btn.innerHTML = `<strong>${choice.id}:</strong> ${choice.text}`;
+            
+            // Bygg innholdet i knappen
+            // Vi ser etter "chance" eller "effect" i objektet fra Host
+            let content = `<strong>${choice.id}:</strong> ${choice.text}`;
+            
+            // Tilleggsinfo (Kampmekanikk osv)
+            let metaInfo = [];
+            if (choice.chance) metaInfo.push(`🎲 ${choice.chance}`);
+            if (choice.effect) metaInfo.push(`✨ ${choice.effect}`);
+            
+            if (metaInfo.length > 0) {
+                content += `<br><small style="color: #bbb; font-weight: normal; font-size: 0.85rem;">${metaInfo.join(" | ")}</small>`;
+            }
+
+            btn.innerHTML = content;
             
             btn.addEventListener('click', () => {
                 sendVote(choice.id);
-                
-                // Visuell feedback
                 document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
                 btn.classList.add('selected');
             });
@@ -215,7 +215,6 @@ function sendVote(choiceId) {
         playerName: myPlayerName
     });
     
-    // Gi feedback til bruker
     ui.voteStatus.textContent = "Stemme registrert!";
     ui.voteStatus.style.opacity = 1;
 }
@@ -228,18 +227,14 @@ function disableVotingButtons() {
 // === EVENT LISTENERS ===
 
 document.addEventListener('DOMContentLoaded', () => {
-    
     if (ui.btnJoin) {
         ui.btnJoin.addEventListener('click', joinGame);
     }
-    
-    // Støtte for å trykke Enter i inputfeltene
     if (ui.inputRoomCode) {
         ui.inputRoomCode.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') joinGame();
         });
     }
-    
-    log("client.js initialisert.");
+    log("client.js v7 initialisert.");
 });
-/* Version: #6 */
+/* Version: #7 */
