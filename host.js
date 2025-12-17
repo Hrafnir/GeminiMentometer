@@ -1,10 +1,10 @@
-/* Version: #9 */
+/* Version: #10 */
 // === KONFIGURASJON & TILSTAND ===
 let peer = null;
 let myRoomId = null;
 let connections = []; 
 let apiKey = localStorage.getItem('gemini_api_key') || '';
-let currentModel = localStorage.getItem('gemini_model') || 'gemini-1.5-flash-002'; // Safer default
+let currentModel = localStorage.getItem('gemini_model') || 'gemini-1.5-flash-002';
 
 // Spill-tilstand
 let currentScenario = {
@@ -14,6 +14,7 @@ let currentScenario = {
 let currentVotes = {}; 
 let isVotingOpen = false;
 let narrativeHistory = [];
+let roundCounter = 1;
 
 // === DOM ELEMENTER ===
 const ui = {
@@ -99,8 +100,6 @@ function initializePeer() {
         ui.statusText.textContent = `Online (ID: ${id})`;
         
         showPanel('lobby');
-        
-        // Sjekk modeller når vi er online
         checkAvailableModels();
     });
 
@@ -116,14 +115,9 @@ function initializePeer() {
             alert(`Tilkoblingsfeil: ${err.type}`);
         }
     });
-    
-    peer.on('disconnected', () => {
-        ui.statusDot.className = 'status-indicator status-disconnected';
-    });
 }
 
 function handleIncomingConnection(conn) {
-    log(`Ny tilkobling: ${conn.peer}`);
     conn.on('open', () => {
         connections.push(conn);
         updatePlayerList();
@@ -177,43 +171,41 @@ async function checkAvailableModels() {
         const data = await res.json();
         if (data.models) {
             log("=== TILGJENGELIGE MODELLER ===", 'success');
-            // Filtrer ut kun de som støtter generateContent
             const validModels = data.models
                 .filter(m => m.supportedGenerationMethods.includes("generateContent"))
                 .map(m => m.name.replace("models/", ""));
-                
             validModels.forEach(m => log(`- ${m}`));
             log("==============================", 'success');
-            
-            // Sjekk om valgt modell finnes
-            if (!validModels.includes(currentModel)) {
-                log(`ADVARSEL: Valgt modell '${currentModel}' ble ikke funnet i listen over.`, 'warning');
-                log(`Tips: Kopier et navn fra listen over og lim inn i 'Modellnavn'-feltet (krever refresh).`, 'warning');
-            }
         }
-    } catch (e) {
-        log(`Kunne ikke hente modelliste: ${e.message}`, 'error');
-    }
+    } catch (e) { log(`Kunne ikke hente modelliste: ${e.message}`, 'error'); }
 }
 
 async function callGeminiApi(contextText) {
     if (!apiKey) { alert("Mangler API Key!"); return; }
 
-    // Bruk brukerens valgte modell
     const modelToUse = ui.modelNameInput.value.trim() || "gemini-1.5-flash-002";
-    log(`Bruker modell: ${modelToUse}`);
-    localStorage.setItem('gemini_model', modelToUse); // Husk til neste gang
+    localStorage.setItem('gemini_model', modelToUse); 
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
     
     let promptHistory = narrativeHistory.join("\n");
     const systemInstruction = `
-        Du er Game Master for et rollespill med en gruppe elever (10. klasse). 
+        Du er Game Master for et rollespill.
         Svar ALLTID med gyldig JSON.
         Format: { "narrative": "...", "choices": [{ "id": "A", "text": "..." }, ...] }
-        Kort, spennende tekst. 2-4 valg.
+        Driv historien fremover basert på spillernes valg. Lag nye utfordringer.
+        Narrativ: Maks 4 setninger.
+        Valg: 2-4 stk.
     `;
-    const userPrompt = `${promptHistory ? "Tidligere hendelser:\n" + promptHistory : ""} \n\n Instruks fra GM: ${contextText || "Start nytt scenario."}`;
+    const userPrompt = `
+        Tidligere historikk:
+        ${promptHistory}
+        
+        Siste hendelse/Instruks: 
+        ${contextText}
+        
+        Generer neste del av historien (Kapittel ${roundCounter}).
+    `;
 
     const payload = {
         contents: [{ parts: [{ text: systemInstruction + "\n\n" + userPrompt }] }]
@@ -230,7 +222,6 @@ async function callGeminiApi(contextText) {
         });
 
         const data = await response.json();
-        
         if (data.error) throw new Error(data.error.message);
 
         let rawText = data.candidates[0].content.parts[0].text;
@@ -242,11 +233,11 @@ async function callGeminiApi(contextText) {
 
     } catch (error) {
         log(`Feil: ${error.message}`, 'error');
-        alert(`Gemini Feil: ${error.message}\n\nSjekk loggen for gyldige modellnavn.`);
+        alert(`Feil: ${error.message}`);
         return null;
     } finally {
         ui.btnGenerate.disabled = false;
-        ui.btnGenerate.textContent = "Generer Neste Scenario";
+        ui.btnGenerate.textContent = "Generer Neste Kapittel"; // Endret tekst
     }
 }
 
@@ -254,26 +245,41 @@ async function callGeminiApi(contextText) {
 
 async function startNewRound() {
     const context = ui.scenarioContextInput.value;
+    
+    // UI Feedback
+    ui.currentNarrative.innerHTML = "<em style='color:#888'>Gemini skriver historien...</em>";
+    ui.votingResults.innerHTML = "";
+    
     const scenario = await callGeminiApi(context);
     if (!scenario) return;
 
+    roundCounter++;
     currentScenario = scenario;
     currentVotes = {}; 
     isVotingOpen = true;
     
+    // Legg til historikk
     narrativeHistory.push(`GM: ${scenario.narrative}`);
-    if (narrativeHistory.length > 5) narrativeHistory.shift();
+    if (narrativeHistory.length > 8) narrativeHistory.shift(); // Økte minnet litt
 
+    // Vis resultat
     ui.currentNarrative.innerHTML = marked.parse(scenario.narrative);
-    ui.scenarioContextInput.value = ""; 
+    ui.scenarioContextInput.value = ""; // Tøm input for neste runde
+    
+    // Reset knappetekst til standard mens spillet pågår
+    ui.btnGenerate.textContent = "Oppdater Scenario (Reset)"; 
+    ui.btnGenerate.style.backgroundColor = ""; // Reset farge
+    
     renderVotingResults();
     broadcast('SCENARIO', currentScenario);
+    
+    // Scroll ned til resultatene
+    ui.resultsPanel.scrollIntoView({ behavior: 'smooth' });
 }
 
 function renderVotingResults() {
     ui.votingResults.innerHTML = '';
     if (!currentScenario.choices || currentScenario.choices.length === 0) {
-        ui.votingResults.innerHTML = '<p>Venter...</p>';
         return;
     }
     const totalVotes = Object.keys(currentVotes).length;
@@ -293,6 +299,50 @@ function renderVotingResults() {
         `;
         ui.votingResults.appendChild(wrapper);
     });
+}
+
+function lockVoting() {
+    if (!isVotingOpen) return;
+    
+    isVotingOpen = false;
+    broadcast('VOTE_LOCKED', {});
+    log("Stemming låst.");
+    
+    // 1. Finn vinneren
+    const counts = {};
+    Object.values(currentVotes).forEach(v => counts[v] = (counts[v] || 0) + 1);
+    
+    let winnerId = null;
+    let maxVotes = -1;
+    for (const [id, count] of Object.entries(counts)) {
+        if (count > maxVotes) {
+            maxVotes = count;
+            winnerId = id;
+        }
+    }
+    
+    // 2. Forbered neste runde automatisk
+    if (winnerId) {
+        const winningChoice = currentScenario.choices.find(c => c.id === winnerId);
+        if (winningChoice) {
+            const resultText = `Spillerne valgte: "${winningChoice.text}".`;
+            narrativeHistory.push(resultText);
+            
+            // HER ER MAGIEN: Vi legger vinner-valget rett inn i input-feltet til GM!
+            ui.scenarioContextInput.value = resultText + " Hva skjer nå?";
+            
+            log(`Vinner: ${winningChoice.text}`);
+        }
+    } else {
+        ui.scenarioContextInput.value = "Ingen stemte. Tiden rant ut. Hva skjer?";
+    }
+
+    // 3. Led oppmerksomheten til "Generer"-knappen
+    ui.btnGenerate.textContent = ">>> GENERER NESTE KAPITTEL >>>";
+    ui.btnGenerate.style.backgroundColor = "#00c853"; // Grønn farge for "Go"
+    
+    // Scroll opp slik at GM ser knappen
+    ui.gamePanel.scrollIntoView({ behavior: 'smooth' });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -315,12 +365,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (ui.btnGenerate) ui.btnGenerate.addEventListener('click', startNewRound);
-    if (ui.btnLockVoting) ui.btnLockVoting.addEventListener('click', () => {
-        isVotingOpen = false;
-        broadcast('VOTE_LOCKED', {});
-        log("Stemming låst.");
-    });
     
-    log("host.js v9 klar.");
+    if (ui.btnLockVoting) ui.btnLockVoting.addEventListener('click', lockVoting);
+    
+    log("host.js v10 (Auto-flow) klar.");
 });
-/* Version: #9 */
+/* Version: #10 */
