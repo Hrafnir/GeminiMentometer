@@ -1,4 +1,4 @@
-/* Version: #10 */
+/* Version: #11 */
 // === KONFIGURASJON & TILSTAND ===
 let peer = null;
 let myRoomId = null;
@@ -13,7 +13,7 @@ let currentScenario = {
 };
 let currentVotes = {}; 
 let isVotingOpen = false;
-let narrativeHistory = [];
+let narrativeHistory = []; // Lagrer hele historien
 let roundCounter = 1;
 
 // === DOM ELEMENTER ===
@@ -188,23 +188,47 @@ async function callGeminiApi(contextText) {
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
     
-    let promptHistory = narrativeHistory.join("\n");
+    // Vi sender med mer historikk nå for bedre kontinuitet
+    let promptHistory = narrativeHistory.join("\n\n");
+    
+    // === DEN VIKTIGE DELEN: SYSTEM INSTRUKSJONER ===
     const systemInstruction = `
-        Du er Game Master for et rollespill.
-        Svar ALLTID med gyldig JSON.
-        Format: { "narrative": "...", "choices": [{ "id": "A", "text": "..." }, ...] }
-        Driv historien fremover basert på spillernes valg. Lag nye utfordringer.
-        Narrativ: Maks 4 setninger.
-        Valg: 2-4 stk.
+        ROLLE:
+        Du er en mesterlig Game Master for et 'Choose Your Own Adventure' rollespill.
+        Målgruppe: Elever på 10. trinn (15-16 år).
+        Sjanger: Nordic Noir / Spenning / Mystikk / Lett Sci-Fi (Stranger Things stemning).
+        
+        REGLER FOR FORTELLINGEN:
+        1. KONTINUITET ER ALT: Start ALLTID det nye kapittelet med å beskrive den direkte konsekvensen av spillernes forrige valg. Hvis de valgte å "løpe", beskriv flukten. Hvis de valgte å "undersøke", beskriv hva de fant.
+        2. SANSENE: Ikke bare fortell hva som skjer. Beskriv lukt (ozon, råte, kanel), lyd (skraping, stillhet, summing), temperatur (iskaldt trekk) og lys.
+        3. SPENNING: Hold språket direkte og engasjerende. Unngå lange, tørre avsnitt.
+        4. STRUKTUR:
+           - Del 1: Reaksjon på forrige valg (Hva skjedde?).
+           - Del 2: Den nye situasjonen/trusselen.
+           - Del 3: "Hva gjør dere?"
+        
+        FORMAT (JSON SKAL ALLTID BRUKES):
+        {
+            "narrative": "Teksten skal være 4-8 setninger lang. Bruk **fet tekst** for viktige detaljer.",
+            "choices": [
+                { "id": "A", "text": "Konkret handling (f.eks 'Løp mot døra')" },
+                { "id": "B", "text": "Undersøkende handling (f.eks 'Sjekk datamaskinen')" },
+                { "id": "C", "text": "Risikabel handling" },
+                { "id": "D", "text": "Sosial/Passiv handling" }
+            ]
+        }
     `;
+
     const userPrompt = `
-        Tidligere historikk:
+        HISTORIKK SÅ LANGT:
         ${promptHistory}
         
-        Siste hendelse/Instruks: 
+        SISTE HENDELSE / SPILLERNES VALG: 
         ${contextText}
         
-        Generer neste del av historien (Kapittel ${roundCounter}).
+        DIN OPPGAVE:
+        Skriv Kapittel ${roundCounter} basert på valget over.
+        Husk å binde valget tett sammen med konsekvensen.
     `;
 
     const payload = {
@@ -213,7 +237,7 @@ async function callGeminiApi(contextText) {
 
     try {
         ui.btnGenerate.disabled = true;
-        ui.btnGenerate.textContent = "Tenker...";
+        ui.btnGenerate.textContent = "Forfatter historie...";
         
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -237,7 +261,7 @@ async function callGeminiApi(contextText) {
         return null;
     } finally {
         ui.btnGenerate.disabled = false;
-        ui.btnGenerate.textContent = "Generer Neste Kapittel"; // Endret tekst
+        ui.btnGenerate.textContent = "Generer Neste Kapittel";
     }
 }
 
@@ -259,21 +283,23 @@ async function startNewRound() {
     isVotingOpen = true;
     
     // Legg til historikk
-    narrativeHistory.push(`GM: ${scenario.narrative}`);
-    if (narrativeHistory.length > 8) narrativeHistory.shift(); // Økte minnet litt
+    // Merk: Vi lagrer bare narrativet, ikke valget ennå (det kommer når de har stemt)
+    narrativeHistory.push(`KAPITTEL ${roundCounter-1}: ${scenario.narrative}`);
+    
+    // Vi kutter historikken hvis den blir for lang (behold siste 3 runder for kontekst)
+    // Dette hjelper Gemini å ikke bli forvirret av gamle detaljer
+    if (narrativeHistory.length > 6) narrativeHistory.shift(); 
 
     // Vis resultat
     ui.currentNarrative.innerHTML = marked.parse(scenario.narrative);
-    ui.scenarioContextInput.value = ""; // Tøm input for neste runde
+    ui.scenarioContextInput.value = ""; 
     
-    // Reset knappetekst til standard mens spillet pågår
     ui.btnGenerate.textContent = "Oppdater Scenario (Reset)"; 
-    ui.btnGenerate.style.backgroundColor = ""; // Reset farge
+    ui.btnGenerate.style.backgroundColor = ""; 
     
     renderVotingResults();
     broadcast('SCENARIO', currentScenario);
     
-    // Scroll ned til resultatene
     ui.resultsPanel.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -308,7 +334,6 @@ function lockVoting() {
     broadcast('VOTE_LOCKED', {});
     log("Stemming låst.");
     
-    // 1. Finn vinneren
     const counts = {};
     Object.values(currentVotes).forEach(v => counts[v] = (counts[v] || 0) + 1);
     
@@ -321,27 +346,24 @@ function lockVoting() {
         }
     }
     
-    // 2. Forbered neste runde automatisk
     if (winnerId) {
         const winningChoice = currentScenario.choices.find(c => c.id === winnerId);
         if (winningChoice) {
-            const resultText = `Spillerne valgte: "${winningChoice.text}".`;
+            const resultText = `SPILLERNE VALGTE: "${winningChoice.text}"`;
+            
+            // Legg valget til historikken slik at Gemini husker hva de gjorde
             narrativeHistory.push(resultText);
             
-            // HER ER MAGIEN: Vi legger vinner-valget rett inn i input-feltet til GM!
-            ui.scenarioContextInput.value = resultText + " Hva skjer nå?";
-            
+            ui.scenarioContextInput.value = resultText;
             log(`Vinner: ${winningChoice.text}`);
         }
     } else {
-        ui.scenarioContextInput.value = "Ingen stemte. Tiden rant ut. Hva skjer?";
+        ui.scenarioContextInput.value = "Ingen stemte. Tiden rant ut.";
     }
 
-    // 3. Led oppmerksomheten til "Generer"-knappen
     ui.btnGenerate.textContent = ">>> GENERER NESTE KAPITTEL >>>";
-    ui.btnGenerate.style.backgroundColor = "#00c853"; // Grønn farge for "Go"
+    ui.btnGenerate.style.backgroundColor = "#00c853"; 
     
-    // Scroll opp slik at GM ser knappen
     ui.gamePanel.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -368,6 +390,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (ui.btnLockVoting) ui.btnLockVoting.addEventListener('click', lockVoting);
     
-    log("host.js v10 (Auto-flow) klar.");
+    log("host.js v11 (High Quality Prompt) klar.");
 });
-/* Version: #10 */
+/* Version: #11 */
