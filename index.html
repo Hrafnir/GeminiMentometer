@@ -1,0 +1,120 @@
+<!-- Version: #1 -->
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG Mentometer - Start</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Midlertidig CSS i tilfelle style.css ikke er opprettet ennå, 
+           slik at siden ser akseptabel ut umiddelbart. 
+           Dette overskrives av style.css senere. */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            background-color: #1e1e1e;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            color: #bb86fc;
+            margin-bottom: 2rem;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #3700b3;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            transition: background-color 0.3s;
+            box-sizing: border-box;
+            cursor: pointer;
+            border: none;
+        }
+        .btn:hover {
+            background-color: #6200ea;
+        }
+        .btn-secondary {
+            background-color: #03dac6;
+            color: #000;
+        }
+        .btn-secondary:hover {
+            background-color: #018786;
+        }
+        footer {
+            margin-top: 2rem;
+            font-size: 0.8rem;
+            color: #757575;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>RPG Mentometer</h1>
+        <p>Velg din rolle for å starte:</p>
+        
+        <a href="host.html" class="btn" id="btn-host">Start som HOST (GM)</a>
+        <a href="client.html" class="btn btn-secondary" id="btn-client">Bli med som SPILLER</a>
+
+        <footer>
+            <p>Drevet av PeerJS & Gemini</p>
+            <p>Versjon #1</p>
+        </footer>
+    </div>
+
+    <script>
+        // === LOGGING SECTION ===
+        (function() {
+            const logPrefix = "[Index] ";
+            
+            console.log(logPrefix + "Siden lastet.");
+            console.log(logPrefix + "Versjon: #1");
+            console.log(logPrefix + "Sjekker navigasjonselementer...");
+
+            const hostBtn = document.getElementById('btn-host');
+            const clientBtn = document.getElementById('btn-client');
+
+            if(hostBtn) {
+                console.log(logPrefix + "Host-knapp funnet.");
+                hostBtn.addEventListener('click', () => {
+                    console.log(logPrefix + "Navigerer til host.html");
+                });
+            } else {
+                console.error(logPrefix + "CRITICAL: Host-knapp mangler!");
+            }
+
+            if(clientBtn) {
+                console.log(logPrefix + "Client-knapp funnet.");
+                clientBtn.addEventListener('click', () => {
+                    console.log(logPrefix + "Navigerer til client.html");
+                });
+            } else {
+                console.error(logPrefix + "CRITICAL: Client-knapp mangler!");
+            }
+
+            console.log(logPrefix + "Init ferdig.");
+        })();
+        // === END LOGGING ===
+    </script>
+</body>
+</html>
+<!-- Version: #1 -->
