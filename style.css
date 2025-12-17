@@ -1,0 +1,238 @@
+/* Version: #2 */
+
+:root {
+    /* Fargepalett (Dark Mode RPG Theme) */
+    --bg-color: #121212;
+    --surface-color: #1e1e1e;
+    --primary-color: #bb86fc; /* Lilla */
+    --primary-variant: #3700b3;
+    --secondary-color: #03dac6; /* Teal */
+    --error-color: #cf6679;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --border-color: #333333;
+    
+    /* Avstander */
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    
+    /* Radius */
+    --radius: 8px;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* === Layout === */
+.container {
+    width: 100%;
+    max-width: 600px; /* Mobilvennlig bredde */
+    padding: var(--spacing-md);
+    box-sizing: border-box;
+}
+
+header, footer {
+    text-align: center;
+    width: 100%;
+    padding: var(--spacing-md);
+}
+
+.card {
+    background-color: var(--surface-color);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    margin-bottom: var(--spacing-md);
+    border: 1px solid var(--border-color);
+}
+
+/* === Typografi === */
+h1, h2, h3 {
+    margin-top: 0;
+    color: var(--primary-color);
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.2rem; color: var(--secondary-color); }
+
+p {
+    line-height: 1.5;
+    margin-bottom: var(--spacing-md);
+}
+
+small {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+/* === Skjemaelementer === */
+input[type="text"], 
+input[type="password"],
+textarea {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: var(--spacing-md);
+    background-color: #2c2c2c;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    box-sizing: border-box;
+    font-size: 1rem;
+}
+
+input:focus, textarea:focus {
+    outline: 2px solid var(--primary-color);
+    border-color: transparent;
+}
+
+/* === Knapper === */
+.btn {
+    display: inline-block;
+    width: 100%;
+    padding: 12px 20px;
+    background-color: var(--primary-variant);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: transform 0.1s, background-color 0.2s;
+    box-sizing: border-box;
+    margin-bottom: var(--spacing-sm);
+}
+
+.btn:hover {
+    background-color: var(--primary-color);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.btn-secondary {
+    background-color: transparent;
+    border: 2px solid var(--secondary-color);
+    color: var(--secondary-color);
+}
+
+.btn-secondary:hover {
+    background-color: rgba(3, 218, 198, 0.1);
+}
+
+.btn-danger {
+    background-color: transparent;
+    border: 1px solid var(--error-color);
+    color: var(--error-color);
+}
+
+.btn-danger:hover {
+    background-color: rgba(207, 102, 121, 0.1);
+}
+
+/* Valg-knapper for klienten (Store og tydelige) */
+.choice-btn {
+    background-color: #333;
+    border: 1px solid var(--border-color);
+    text-align: left;
+    margin-bottom: 10px;
+    white-space: normal; /* Tillat tekstbryting */
+}
+
+.choice-btn.selected {
+    background-color: var(--primary-variant);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 8px var(--primary-variant);
+}
+
+/* === Statusindikasjoner === */
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+.status-connected { background-color: var(--secondary-color); box-shadow: 0 0 5px var(--secondary-color); }
+.status-disconnected { background-color: var(--error-color); }
+.status-connecting { background-color: #ffeb3b; }
+
+/* === Visualisering av stemmer (Host) === */
+.results-container {
+    margin-top: var(--spacing-md);
+}
+
+.result-bar-wrapper {
+    margin-bottom: 10px;
+}
+
+.result-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+}
+
+.result-track {
+    background-color: #333;
+    height: 20px;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.result-fill {
+    background-color: var(--secondary-color);
+    height: 100%;
+    width: 0%;
+    transition: width 0.5s ease-out;
+}
+
+/* === Utility Classes === */
+.hidden {
+    display: none !important;
+}
+
+.fade-in {
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Enkel logg-visning for debugging i UI (hvis ønskelig) */
+#console-log {
+    background: #000;
+    color: #0f0;
+    font-family: monospace;
+    padding: 10px;
+    margin-top: 20px;
+    border: 1px solid #333;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+    display: none; /* Skjult som standard */
+}
+
+/* Version: #2 */
