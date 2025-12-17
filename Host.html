@@ -1,0 +1,120 @@
+<!-- Version: #3 -->
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG Mentometer - HOST</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- PeerJS Library for P2P connection -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Marked Library for Markdown parsing (optional but good for Gemini text) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>GM Kontrollpanel</h1>
+            <div id="connection-status">
+                <span class="status-indicator status-disconnected" id="status-dot"></span>
+                <span id="status-text">Frakoblet</span>
+            </div>
+            <a href="index.html" style="color: #666; font-size: 0.8rem;">&larr; Tilbake til start</a>
+        </header>
+
+        <!-- SEKSJON 1: SETUP (API Key & Start) -->
+        <div id="setup-panel" class="card">
+            <h2>Konfigurasjon</h2>
+            <p>For å bruke Gemini til å generere rollespill, trenger du en API-nøkkel.</p>
+            
+            <label for="api-key">Gemini API Key:</label>
+            <input type="password" id="api-key" placeholder="Lim inn AI Studio API Key her...">
+            
+            <button id="btn-start-hosting" class="btn">Opprett Rom & Start Server</button>
+            <small>Nøkkelen lagres lokalt i nettleseren din.</small>
+        </div>
+
+        <!-- SEKSJON 2: LOBBY (Vises etter start) -->
+        <div id="lobby-panel" class="card hidden">
+            <h2>Lobby</h2>
+            <div style="text-align: center; margin: 20px 0;">
+                <p>Be elevene gå til startsiden, velge "Bli med" og bruke denne koden:</p>
+                <div id="room-code-display" style="font-size: 3rem; font-weight: bold; letter-spacing: 5px; color: var(--secondary-color); border: 2px dashed #444; padding: 10px; display: inline-block;">
+                    ----
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Tilkoblede spillere: <span id="player-count">0</span></h3>
+            </div>
+            <ul id="player-list" style="list-style: none; padding: 0; color: #aaa; max-height: 100px; overflow-y: auto; text-align: left; background: #1a1a1a; padding: 10px;">
+                <!-- Spillernavn legges til her dynamisk -->
+                <li><i>Ingen spillere ennå...</i></li>
+            </ul>
+        </div>
+
+        <!-- SEKSJON 3: SPILLKONTROLL (Gemini Prompting) -->
+        <div id="game-panel" class="card hidden">
+            <h2>Spillmester (Gemini)</h2>
+            
+            <div style="margin-bottom: 15px;">
+                <label for="scenario-context">Kontekst / Handling:</label>
+                <textarea id="scenario-context" rows="3" placeholder="F.eks: 'Spillerne står foran en låst dør i en romstasjon...' eller la stå tomt for å fortsette historien automatically."></textarea>
+            </div>
+
+            <button id="btn-generate" class="btn">Generer Neste Scenario (Gemini)</button>
+            
+            <!-- Manuell overstyring (skjult som default, kan toggles hvis vi vil senere, men holder det enkelt nå) -->
+        </div>
+
+        <!-- SEKSJON 4: LIVE RESULTATER -->
+        <div id="results-panel" class="card hidden">
+            <h2>Nåværende Situasjon</h2>
+            
+            <!-- Her viser vi teksten som Gemini genererte -->
+            <div id="current-narrative" style="background: #252525; padding: 15px; border-left: 4px solid var(--primary-color); margin-bottom: 20px; font-style: italic;">
+                Venter på generering...
+            </div>
+
+            <h3>Stemmeresultater</h3>
+            <div id="voting-results" class="results-container">
+                <!-- Søyler genereres her dynamisk via JS -->
+                <p style="text-align: center; color: #666;">Ingen avstemning pågår.</p>
+            </div>
+
+            <div style="margin-top: 20px; text-align: right;">
+                <button id="btn-lock-voting" class="btn btn-secondary" style="width: auto;">Avslutt/Lås Stemming</button>
+            </div>
+        </div>
+
+        <!-- DEBUG LOG (Nyttig for å se hva som skjer "under panseret") -->
+        <div class="card">
+            <h3 style="cursor: pointer;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">System Logg (Trykk for å vise/skjule) &#9660;</h3>
+            <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.75rem; color: #0f0; background: #000; padding: 10px; height: 150px; overflow-y: scroll;">
+                <div>[System] Host panel lastet.</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script som inneholder logikken -->
+    <script src="host.js"></script>
+
+    <script>
+        // Enkel hjelpefunksjon for å legge til logg i UIet med en gang siden laster
+        function logToUi(msg) {
+            const logEl = document.getElementById('debug-log');
+            if(logEl) {
+                const entry = document.createElement('div');
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                logEl.appendChild(entry);
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+            console.log(`[HOST] ${msg}`);
+        }
+        logToUi("host.html ferdig rendret. Venter på host.js...");
+    </script>
+</body>
+</html>
+<!-- Version: #3 -->
