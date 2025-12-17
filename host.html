@@ -1,4 +1,4 @@
-<!-- Version: #8 -->
+<!-- Version: #12 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
@@ -6,9 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RPG Mentometer - HOST</title>
     <link rel="stylesheet" href="style.css">
-    <!-- PeerJS Library for P2P connection -->
+    <!-- PeerJS Library -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- Marked Library for Markdown parsing -->
+    <!-- Marked Library -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -23,88 +23,93 @@
             <a href="index.html" style="color: #666; font-size: 0.8rem;">&larr; Tilbake til start</a>
         </header>
 
-        <!-- SEKSJON 1: SETUP (API Key & Start) -->
+        <!-- SEKSJON 1: SETUP (Nå med Scenario-bygger) -->
         <div id="setup-panel" class="card">
-            <h2>Konfigurasjon</h2>
-            <p>For å bruke Gemini til å generere rollespill, trenger du en API-nøkkel.</p>
+            <h2>1. Konfigurasjon</h2>
             
             <label for="api-key">Gemini API Key:</label>
-            <input type="password" id="api-key" placeholder="Lim inn AI Studio API Key her...">
+            <input type="password" id="api-key" placeholder="Lim inn API Key her...">
             
-            <label for="model-name">Modellnavn (Valgfritt):</label>
-            <input type="text" id="model-name" value="gemini-1.5-flash-002" placeholder="F.eks. gemini-1.5-flash-002">
-            <small style="display:block; margin-bottom:10px; color:#888;">
-                Tips: Sjekk loggen nederst etter at du trykker start for å se gyldige navn.
-                Prøv også <b>gemini-2.0-flash-exp</b> eller <b>gemini-3.0-flash-preview</b> hvis du har tilgang.
-            </small>
+            <label for="model-name">Modellnavn:</label>
+            <input type="text" id="model-name" value="gemini-1.5-flash-002" placeholder="F.eks. gemini-1.5-flash">
 
-            <button id="btn-start-hosting" class="btn">Opprett Rom & Start Server</button>
-            <small>Nøkkelen lagres lokalt i nettleseren din.</small>
+            <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
+
+            <h2>2. Design Eventyret</h2>
+            <p style="font-size: 0.9rem; color: #aaa;">Her bestemmer du reglene og verdenen. Jo mer detaljert, jo bedre intro.</p>
+            
+            <label for="game-premise">Premiss / Verden / Regler:</label>
+            <textarea id="game-premise" rows="6" placeholder="F.eks:
+Sjanger: High Fantasy (D&D stil).
+Spillerne er: En gruppe uerfarne eventyrere (Kriger, Tyv, Trollmann).
+Setting: De våkner i et fangehull uten minner.
+Tone: Humoristisk men farlig.
+Mekanikk: Hvis det er kamp, gi oss prosentvis sjanse for å lykkes."></textarea>
+            
+            <button id="btn-start-hosting" class="btn">Opprett Rom & Generer Intro</button>
         </div>
 
-        <!-- SEKSJON 2: LOBBY (Vises etter start) -->
+        <!-- SEKSJON 2: LOBBY -->
         <div id="lobby-panel" class="card hidden">
-            <h2>Lobby</h2>
-            <div style="text-align: center; margin: 20px 0;">
-                <p>Be elevene gå til startsiden, velge "Bli med" og bruke denne koden:</p>
-                <div id="room-code-display" style="font-size: 3rem; font-weight: bold; letter-spacing: 5px; color: var(--secondary-color); border: 2px dashed #444; padding: 10px; display: inline-block;">
-                    ----
+            <div style="text-align: center;">
+                <p>Romkode:</p>
+                <div id="room-code-display" style="font-size: 3rem; font-weight: bold; color: var(--secondary-color); letter-spacing: 5px;">----</div>
+                <div style="margin-top: 10px;">
+                    <span id="player-count">0</span> spillere tilkoblet
                 </div>
             </div>
-            
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h3>Tilkoblede spillere: <span id="player-count">0</span></h3>
-            </div>
-            <ul id="player-list" style="list-style: none; padding: 0; color: #aaa; max-height: 100px; overflow-y: auto; text-align: left; background: #1a1a1a; padding: 10px;">
-                <!-- Spillernavn legges til her dynamisk -->
-                <li><i>Ingen spillere ennå...</i></li>
-            </ul>
+            <!-- Skjult liste for å spare plass, vises ved behov -->
+            <details style="margin-top: 10px; cursor: pointer; color: #888;">
+                <summary>Vis spillerliste</summary>
+                <ul id="player-list" style="list-style: none; padding: 10px; background: #1a1a1a;"></ul>
+            </details>
         </div>
 
-        <!-- SEKSJON 3: SPILLKONTROLL (Gemini Prompting) -->
+        <!-- SEKSJON 3: STORY DISPLAY -->
         <div id="game-panel" class="card hidden">
-            <h2>Spillmester (Gemini)</h2>
+            <h2>Historien</h2>
             
-            <div style="margin-bottom: 15px;">
-                <label for="scenario-context">Kontekst / Handling:</label>
-                <textarea id="scenario-context" rows="3" placeholder="F.eks: 'Spillerne står foran en låst dør...'"></textarea>
+            <!-- Her kommer teksten fra Gemini -->
+            <div id="current-narrative" style="background: #252525; padding: 20px; border-radius: 5px; margin-bottom: 20px; line-height: 1.6;">
+                <em style="color: #888;">Genererer introduksjon...</em>
             </div>
 
-            <button id="btn-generate" class="btn">Generer Neste Scenario (Gemini)</button>
+            <!-- Stemmeresultater -->
+            <h3>Stemmer</h3>
+            <div id="voting-results" class="results-container"></div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="btn-lock-voting" class="btn btn-secondary">Lås Stemming</button>
+            </div>
         </div>
 
-        <!-- SEKSJON 4: LIVE RESULTATER -->
-        <div id="results-panel" class="card hidden">
-            <h2>Nåværende Situasjon</h2>
+        <!-- SEKSJON 4: GM INPUT (Neste runde) -->
+        <div id="gm-input-panel" class="card hidden">
+            <h2>Game Master Input</h2>
+            <p style="font-size: 0.8rem; color: #aaa;">Juster hva som skjedde, eller legg til egne ideer før neste generering.</p>
             
-            <!-- Her viser vi teksten som Gemini genererte -->
-            <div id="current-narrative" style="background: #252525; padding: 15px; border-left: 4px solid var(--primary-color); margin-bottom: 20px; font-style: italic;">
-                Venter på generering...
+            <label for="scenario-context">Kontekst for neste kapittel:</label>
+            <textarea id="scenario-context" rows="3"></textarea>
+
+            <div style="margin: 10px 0;">
+                <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="chk-custom-option" style="width: auto; margin: 0 10px 0 0;">
+                    Inkluder valg for "Eget forslag fra klassen"
+                </label>
             </div>
 
-            <h3>Stemmeresultater</h3>
-            <div id="voting-results" class="results-container">
-                <p style="text-align: center; color: #666;">Ingen avstemning pågår.</p>
-            </div>
-
-            <div style="margin-top: 20px; text-align: right;">
-                <button id="btn-lock-voting" class="btn btn-secondary" style="width: auto;">Avslutt/Lås Stemming</button>
-            </div>
+            <button id="btn-generate" class="btn">Generer Neste Kapittel</button>
         </div>
 
         <!-- DEBUG LOG -->
         <div class="card">
-            <h3 style="cursor: pointer;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">System Logg (Trykk for å vise/skjule) &#9660;</h3>
-            <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.75rem; color: #0f0; background: #000; padding: 10px; height: 150px; overflow-y: scroll;">
-                <div>[System] Host panel lastet.</div>
-            </div>
+            <h3 style="cursor: pointer; font-size: 0.8rem;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">System Logg &#9660;</h3>
+            <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.7rem; color: #0f0; background: #000; padding: 10px; height: 100px; overflow-y: scroll;"></div>
         </div>
 
     </div>
 
-    <!-- Script som inneholder logikken -->
     <script src="host.js"></script>
-
     <script>
         function logToUi(msg) {
             const logEl = document.getElementById('debug-log');
@@ -116,8 +121,8 @@
             }
             console.log(`[HOST] ${msg}`);
         }
-        logToUi("host.html ferdig rendret. Venter på host.js...");
+        logToUi("host.html v12 lastet.");
     </script>
 </body>
 </html>
-<!-- Version: #8 -->
+<!-- Version: #12 -->
