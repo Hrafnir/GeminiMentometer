@@ -1,4 +1,4 @@
-<!-- Version: #3 -->
+<!-- Version: #8 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <!-- PeerJS Library for P2P connection -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- Marked Library for Markdown parsing (optional but good for Gemini text) -->
+    <!-- Marked Library for Markdown parsing -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -31,6 +31,13 @@
             <label for="api-key">Gemini API Key:</label>
             <input type="password" id="api-key" placeholder="Lim inn AI Studio API Key her...">
             
+            <label for="model-name">Modellnavn (Valgfritt):</label>
+            <input type="text" id="model-name" value="gemini-1.5-flash-002" placeholder="F.eks. gemini-1.5-flash-002">
+            <small style="display:block; margin-bottom:10px; color:#888;">
+                Tips: Sjekk loggen nederst etter at du trykker start for å se gyldige navn.
+                Prøv også <b>gemini-2.0-flash-exp</b> eller <b>gemini-3.0-flash-preview</b> hvis du har tilgang.
+            </small>
+
             <button id="btn-start-hosting" class="btn">Opprett Rom & Start Server</button>
             <small>Nøkkelen lagres lokalt i nettleseren din.</small>
         </div>
@@ -60,12 +67,10 @@
             
             <div style="margin-bottom: 15px;">
                 <label for="scenario-context">Kontekst / Handling:</label>
-                <textarea id="scenario-context" rows="3" placeholder="F.eks: 'Spillerne står foran en låst dør i en romstasjon...' eller la stå tomt for å fortsette historien automatically."></textarea>
+                <textarea id="scenario-context" rows="3" placeholder="F.eks: 'Spillerne står foran en låst dør...'"></textarea>
             </div>
 
             <button id="btn-generate" class="btn">Generer Neste Scenario (Gemini)</button>
-            
-            <!-- Manuell overstyring (skjult som default, kan toggles hvis vi vil senere, men holder det enkelt nå) -->
         </div>
 
         <!-- SEKSJON 4: LIVE RESULTATER -->
@@ -79,7 +84,6 @@
 
             <h3>Stemmeresultater</h3>
             <div id="voting-results" class="results-container">
-                <!-- Søyler genereres her dynamisk via JS -->
                 <p style="text-align: center; color: #666;">Ingen avstemning pågår.</p>
             </div>
 
@@ -88,7 +92,7 @@
             </div>
         </div>
 
-        <!-- DEBUG LOG (Nyttig for å se hva som skjer "under panseret") -->
+        <!-- DEBUG LOG -->
         <div class="card">
             <h3 style="cursor: pointer;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">System Logg (Trykk for å vise/skjule) &#9660;</h3>
             <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.75rem; color: #0f0; background: #000; padding: 10px; height: 150px; overflow-y: scroll;">
@@ -102,7 +106,6 @@
     <script src="host.js"></script>
 
     <script>
-        // Enkel hjelpefunksjon for å legge til logg i UIet med en gang siden laster
         function logToUi(msg) {
             const logEl = document.getElementById('debug-log');
             if(logEl) {
@@ -117,4 +120,4 @@
     </script>
 </body>
 </html>
-<!-- Version: #3 -->
+<!-- Version: #8 -->
