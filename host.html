@@ -1,4 +1,4 @@
-<!-- Version: #14 -->
+<!-- Version: #17 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
@@ -26,9 +26,20 @@
             <h2>1. Konfigurasjon</h2>
             <label>Gemini API Key:</label>
             <input type="password" id="api-key" placeholder="Lim inn API Key her...">
-            <label>Modellnavn:</label>
-            <input type="text" id="model-name" value="gemini-1.5-flash" placeholder="F.eks. gemini-1.5-flash">
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label>Tekst-modell (Historie):</label>
+                    <input type="text" id="model-name-text" value="gemini-3-flash-preview" placeholder="F.eks. gemini-3-flash-preview">
+                </div>
+                <div style="flex: 1;">
+                    <label>Bilde-modell (Illustrasjon):</label>
+                    <input type="text" id="model-name-image" value="gemini-2.5-flash-image" placeholder="F.eks. gemini-2.5-flash-image">
+                </div>
+            </div>
+
             <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
+            
             <h2>2. Design Eventyret</h2>
             <label>Premiss / Verden / Regler:</label>
             <textarea id="game-premise" rows="6" placeholder="Beskriv verden, regler og start-situasjon..."></textarea>
@@ -46,7 +57,6 @@
                 <summary>Vis spillerliste</summary>
                 <ul id="player-list" style="list-style: none; padding: 10px; background: #1a1a1a;"></ul>
             </details>
-            <!-- NY KNAPP: VIS HISTORIKK -->
             <button id="btn-view-history" class="btn btn-secondary" style="margin-top: 10px;">📜 Vis Historikk / Print</button>
         </div>
 
@@ -57,11 +67,11 @@
             <!-- BILDE -->
             <div id="scene-image-container" style="text-align: center; margin-bottom: 15px; display: none;">
                 <img id="scene-image" src="" alt="Scenebilde" style="max-width: 100%; border-radius: 8px; border: 2px solid #444;">
-                <p style="font-size: 0.7rem; color: #666; margin-top: 5px;">Generert av AI</p>
+                <p style="font-size: 0.7rem; color: #666; margin-top: 5px;" id="image-credit">Generert av Gemini</p>
             </div>
 
             <div id="current-narrative" style="background: #252525; padding: 20px; border-radius: 5px; margin-bottom: 20px; line-height: 1.6;">
-                <em style="color: #888;">Genererer...</em>
+                <em style="color: #888;">Venter på start...</em>
             </div>
 
             <h3>Stemmer</h3>
@@ -93,7 +103,7 @@
         </div>
     </div>
 
-    <!-- HISTORIKK MODAL (Vises over alt annet ved print) -->
+    <!-- HISTORIKK MODAL -->
     <div id="history-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; z-index: 999; overflow-y: auto; padding: 20px; box-sizing: border-box;">
         <div style="max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 40px; border-radius: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -103,13 +113,11 @@
                     <button id="btn-close-history" class="btn btn-secondary" style="width: auto; display: inline-block;">Lukk</button>
                 </div>
             </div>
-            <div id="history-content" style="font-family: 'Georgia', serif; line-height: 1.8; color: #e0e0e0;">
-                <!-- Historikk fylles inn her -->
-            </div>
+            <div id="history-content" style="font-family: 'Georgia', serif; line-height: 1.8; color: #e0e0e0;"></div>
         </div>
     </div>
 
     <script src="host.js"></script>
 </body>
 </html>
-<!-- Version: #14 -->
+<!-- Version: #17 -->
