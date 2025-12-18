@@ -1,19 +1,19 @@
-/* Version: #16 */
+/* Version: #18 */
 // === KONFIGURASJON & TILSTAND ===
 let peer = null;
 let myRoomId = null;
 let connections = []; 
 let apiKey = localStorage.getItem('gemini_api_key') || '';
-// Endret standardmodell til en spesifikk versjon som ofte er mer stabil
-let currentModel = localStorage.getItem('gemini_model') || 'gemini-1.5-flash-002';
+
+// Modeller
+let textModel = localStorage.getItem('gemini_text_model') || 'gemini-3-flash-preview';
+let imageModel = localStorage.getItem('gemini_image_model') || 'gemini-2.5-flash-image';
 
 let gamePremise = ""; 
 let currentScenario = { narrative: "", choices: [], imageUrl: "" };
 let currentVotes = {}; 
 let isVotingOpen = false;
 let roundCounter = 0;
-
-// Historikk
 let fullGameLog = [];
 let narrativeContext = []; 
 
@@ -25,7 +25,8 @@ const ui = {
     gmInputPanel: document.getElementById('gm-input-panel'),
     
     apiKeyInput: document.getElementById('api-key'),
-    modelNameInput: document.getElementById('model-name'),
+    modelNameText: document.getElementById('model-name-text'),
+    modelNameImage: document.getElementById('model-name-image'),
     gamePremiseInput: document.getElementById('game-premise'),
     btnStartHosting: document.getElementById('btn-start-hosting'),
     
@@ -41,6 +42,7 @@ const ui = {
     currentNarrative: document.getElementById('current-narrative'),
     sceneImageContainer: document.getElementById('scene-image-container'),
     sceneImage: document.getElementById('scene-image'),
+    imageCredit: document.getElementById('image-credit'),
     votingResults: document.getElementById('voting-results'),
     btnLockVoting: document.getElementById('btn-lock-voting'),
     
@@ -100,10 +102,9 @@ function initializePeer() {
         ui.statusDot.className = 'status-indicator status-connected';
         ui.statusText.textContent = `Online (${id})`;
         
-        checkAvailableModels().then(() => {
-            startNewRound(true);
-            showPanel('game');
-        });
+        checkAvailableModels();
+        startNewRound(true);
+        showPanel('game');
     });
 
     peer.on('connection', (conn) => handleIncomingConnection(conn));
@@ -152,7 +153,7 @@ function broadcast(type, data) {
     connections.forEach(conn => { if (conn.open) conn.send({ type, data }); });
 }
 
-// === GEMINI API ===
+// === GEMINI API (2-TRINNS RAKETT) ===
 
 async function checkAvailableModels() {
     if (!apiKey) return;
@@ -162,42 +163,36 @@ async function checkAvailableModels() {
         
         log("=== DINE MODELLER ===", 'success');
         if (data.models) {
-            // Filtrer og vis modellene
             const valid = data.models.map(m => m.name.replace("models/", ""));
             valid.forEach(m => log(`- ${m}`));
-            
-            // Sjekk om valgt modell er gyldig
-            if (!valid.includes(currentModel) && !valid.includes(`models/${currentModel}`)) {
-                log(`ADVARSEL: '${currentModel}' ble ikke funnet i listen.`, 'warning');
-            }
         }
     } catch (e) { log(`Modell-sjekk feilet: ${e.message}`, 'error'); }
 }
 
-async function callGeminiApi(contextText, isIntro = false) {
-    if (!apiKey) { alert("Mangler API Key!"); return; }
+// STEG 1: Generer Historie (Tekst)
+async function callTextApi(contextText, isIntro = false) {
+    if (!apiKey) { alert("Mangler API Key!"); return null; }
     
-    // Bruk det som står i feltet, eller fallback
-    const modelToUse = ui.modelNameInput.value.trim() || currentModel;
-    localStorage.setItem('gemini_model', modelToUse); 
+    // Oppdater modellvalg
+    textModel = ui.modelNameText.value.trim();
+    localStorage.setItem('gemini_text_model', textModel);
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${textModel}:generateContent?key=${apiKey}`;
     let promptHistory = narrativeContext.join("\n\n");
     
     const systemInstruction = `
         ROLLE: Game Master.
         VERDEN: "${gamePremise}"
         
-        VIKTIG OM BILDER:
-        Du skal også generere en 'image_prompt' på engelsk. Denne sendes til en AI-illustratør.
-        Beskriv stemningen, lyssettingen og hovedmotivet i scenen. Ikke bruk tekst i bildet.
+        INSTRUKT OM BILDER:
+        Du skal generere en 'image_prompt' på engelsk som beskriver scenen visuelt (lyssetting, motiv, stemning).
         
         OUTPUT FORMAT (JSON):
         {
             "narrative": "Historietekst (Markdown).",
-            "image_prompt": "Visual description in English (Cinematic, Horror/Comedy style).",
+            "image_prompt": "Visual description in English.",
             "choices": [
-                { "id": "A", "text": "Handling", "chance": "50% (Valgfritt)", "effect": "Konsekvens (Valgfritt)" },
+                { "id": "A", "text": "Handling", "chance": "50% (Valgfritt)", "effect": "Konsekvens" },
                 ...
             ]
         }
@@ -208,12 +203,7 @@ async function callGeminiApi(contextText, isIntro = false) {
         : `HISTORIKK:\n${promptHistory}\n\nSISTE INPUT:\n${contextText}\n\nSkriv Kapittel ${roundCounter}.`;
 
     try {
-        ui.btnGenerate.disabled = true;
-        ui.btnGenerate.textContent = "Forfatter...";
-        ui.currentNarrative.style.opacity = 0.5;
-        
-        log(`Sender til modell: ${modelToUse}`);
-        
+        log(`Genererer tekst med ${textModel}...`);
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -221,40 +211,61 @@ async function callGeminiApi(contextText, isIntro = false) {
         });
 
         const data = await response.json();
-        
-        // HÅNDTER FEIL (404 etc)
-        if (data.error) {
-            if (data.error.code === 404) {
-                alert(`Modellen '${modelToUse}' ble ikke funnet (404). \n\nSjekk listen i loggboksen nederst, kopier et gyldig navn, og lim inn i feltet 'Modellnavn'.`);
-            } else {
-                throw new Error(data.error.message);
-            }
-            return null;
-        }
+        if (data.error) throw new Error(data.error.message);
 
         let rawText = data.candidates[0].content.parts[0].text;
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const scenarioObj = JSON.parse(rawText);
-        
-        // Generer bilde URL
-        if (scenarioObj.image_prompt) {
-            // Pollinations trenger engelsk beskrivelse. 
-            // Vi legger til "Horror Comedy" keywords for å sikre stilen.
-            const style = "cinematic lighting, survival horror comedy style, detailed, 8k, atmospheric, bjornsveen school";
-            const encodedPrompt = encodeURIComponent(`${scenarioObj.image_prompt}, ${style}`);
-            scenarioObj.imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random()*9999)}`;
-        }
-        
-        return scenarioObj;
+        return JSON.parse(rawText);
 
     } catch (error) {
-        log(`Feil: ${error.message}`, 'error');
-        alert(`Noe gikk galt: ${error.message}`);
+        log(`Tekst-generering feilet: ${error.message}`, 'error');
+        alert(`Tekst-feil: ${error.message}`);
         return null;
-    } finally {
-        ui.btnGenerate.disabled = false;
-        ui.btnGenerate.textContent = "Generer Neste Kapittel";
-        ui.currentNarrative.style.opacity = 1;
+    }
+}
+
+// STEG 2: Generer Bilde (Native Gemini Image)
+async function callImageApi(prompt) {
+    if (!prompt) return null;
+    
+    imageModel = ui.modelNameImage.value.trim();
+    localStorage.setItem('gemini_image_model', imageModel);
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent?key=${apiKey}`;
+    
+    // Forbedre prompten litt
+    const enhancedPrompt = `${prompt}, cinematic lighting, detailed, 8k, atmospheric, survival horror style`;
+    
+    try {
+        log(`Genererer bilde med ${imageModel}...`);
+        
+        // Payload for bildegenerering varierer litt, men Gemini API bruker ofte standard generateContent 
+        // hvor modellen returnerer "inlineData" (mimeType image/jpeg) i stedet for tekst.
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: enhancedPrompt }] }] })
+        });
+
+        const data = await response.json();
+        if (data.error) {
+            log(`Bilde-generering feil (ignorerer bilde): ${data.error.message}`, 'warning');
+            return null; 
+        }
+
+        // Sjekk om vi fikk bilde-data
+        const part = data.candidates?.[0]?.content?.parts?.[0];
+        if (part && part.inline_data) {
+            // Suksess! Vi har rådata.
+            return `data:${part.inline_data.mime_type};base64,${part.inline_data.data}`;
+        } else {
+            log("Modellen returnerte ikke bilde-data. Sjekk modellnavnet.", 'warning');
+            return null;
+        }
+
+    } catch (error) {
+        log(`Bilde-feil: ${error.message}`, 'error');
+        return null;
     }
 }
 
@@ -265,12 +276,37 @@ async function startNewRound(isIntro = false) {
     ui.currentNarrative.innerHTML = "<em style='color:#888'>Gemini skriver historien...</em>";
     ui.sceneImageContainer.style.display = 'none';
     
-    const scenario = await callGeminiApi(context, isIntro);
-    if (!scenario) return; // Stopp hvis feil
+    ui.btnGenerate.disabled = true;
+    ui.btnGenerate.textContent = "Jobber...";
 
-    roundCounter++;
-    currentScenario = scenario;
+    // 1. Hent tekst
+    const scenario = await callTextApi(context, isIntro);
     
+    if (scenario) {
+        roundCounter++;
+        currentScenario = scenario;
+        
+        // 2. Hent bilde (hvis vi har prompt)
+        if (scenario.image_prompt) {
+            ui.currentNarrative.innerHTML += "<br><em style='color:#888'>...og maler bildet...</em>";
+            const imageBase64 = await callImageApi(scenario.image_prompt);
+            if (imageBase64) {
+                currentScenario.imageUrl = imageBase64;
+                ui.sceneImage.src = imageBase64;
+                ui.sceneImageContainer.style.display = 'block';
+                ui.imageCredit.textContent = `Generert av ${imageModel}`;
+            }
+        }
+
+        // Fortsett flyten
+        finishRoundSetup(isIntro, scenario);
+    }
+    
+    ui.btnGenerate.disabled = false;
+    ui.btnGenerate.textContent = "Generer Neste Kapittel";
+}
+
+function finishRoundSetup(isIntro, scenario) {
     // Eget forslag logikk
     if (ui.chkCustomOption && ui.chkCustomOption.checked) {
         currentScenario.choices.push({ id: "X", text: "Eget forslag (Klassen diskuterer)", effect: "GM bestemmer" });
@@ -295,11 +331,6 @@ async function startNewRound(isIntro = false) {
     ui.scenarioContextInput.value = ""; 
     ui.btnGenerate.textContent = "Oppdater (Reset)"; 
     ui.btnGenerate.style.backgroundColor = ""; 
-    
-    if (scenario.imageUrl) {
-        ui.sceneImage.src = scenario.imageUrl;
-        ui.sceneImageContainer.style.display = 'block';
-    }
 
     renderVotingResults();
     broadcast('SCENARIO', currentScenario);
@@ -384,15 +415,13 @@ function showHistory() {
 // === INIT ===
 document.addEventListener('DOMContentLoaded', () => {
     if (ui.apiKeyInput) ui.apiKeyInput.value = apiKey;
-    if (ui.modelNameInput) ui.modelNameInput.value = currentModel;
+    if (ui.modelNameText) ui.modelNameText.value = textModel;
+    if (ui.modelNameImage) ui.modelNameImage.value = imageModel;
     
     if (ui.btnStartHosting) ui.btnStartHosting.addEventListener('click', () => {
         apiKey = ui.apiKeyInput.value.trim();
         gamePremise = ui.gamePremiseInput.value.trim();
         if (!apiKey || !gamePremise) { alert("Mangler nøkkel eller premiss!"); return; }
-        
-        // Oppdater input-feltet med lagret modell hvis brukeren ikke har endret det
-        currentModel = ui.modelNameInput.value.trim(); 
         
         localStorage.setItem('gemini_api_key', apiKey);
         initializePeer();
@@ -404,6 +433,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ui.btnViewHistory) ui.btnViewHistory.addEventListener('click', showHistory);
     if (ui.btnCloseHistory) ui.btnCloseHistory.addEventListener('click', () => ui.historyModal.classList.add('hidden'));
 
-    log("host.js v16 klar.");
+    log("host.js v18 (Dual Model) klar.");
 });
-/* Version: #16 */
+/* Version: #18 */
