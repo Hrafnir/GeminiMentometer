@@ -1,4 +1,4 @@
-<!-- Version: #12 -->
+<!-- Version: #14 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
@@ -6,14 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RPG Mentometer - HOST</title>
     <link rel="stylesheet" href="style.css">
-    <!-- PeerJS Library -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- Marked Library -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 
-    <div class="container">
+    <div class="container" id="main-container">
         <header>
             <h1>GM Kontrollpanel</h1>
             <div id="connection-status">
@@ -23,30 +21,18 @@
             <a href="index.html" style="color: #666; font-size: 0.8rem;">&larr; Tilbake til start</a>
         </header>
 
-        <!-- SEKSJON 1: SETUP (Nå med Scenario-bygger) -->
+        <!-- SEKSJON 1: SETUP -->
         <div id="setup-panel" class="card">
             <h2>1. Konfigurasjon</h2>
-            
-            <label for="api-key">Gemini API Key:</label>
+            <label>Gemini API Key:</label>
             <input type="password" id="api-key" placeholder="Lim inn API Key her...">
-            
-            <label for="model-name">Modellnavn:</label>
-            <input type="text" id="model-name" value="gemini-1.5-flash-002" placeholder="F.eks. gemini-1.5-flash">
-
+            <label>Modellnavn:</label>
+            <input type="text" id="model-name" value="gemini-1.5-flash" placeholder="F.eks. gemini-1.5-flash">
             <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
-
             <h2>2. Design Eventyret</h2>
-            <p style="font-size: 0.9rem; color: #aaa;">Her bestemmer du reglene og verdenen. Jo mer detaljert, jo bedre intro.</p>
-            
-            <label for="game-premise">Premiss / Verden / Regler:</label>
-            <textarea id="game-premise" rows="6" placeholder="F.eks:
-Sjanger: High Fantasy (D&D stil).
-Spillerne er: En gruppe uerfarne eventyrere (Kriger, Tyv, Trollmann).
-Setting: De våkner i et fangehull uten minner.
-Tone: Humoristisk men farlig.
-Mekanikk: Hvis det er kamp, gi oss prosentvis sjanse for å lykkes."></textarea>
-            
-            <button id="btn-start-hosting" class="btn">Opprett Rom & Generer Intro</button>
+            <label>Premiss / Verden / Regler:</label>
+            <textarea id="game-premise" rows="6" placeholder="Beskriv verden, regler og start-situasjon..."></textarea>
+            <button id="btn-start-hosting" class="btn">Opprett Rom & Start</button>
         </div>
 
         <!-- SEKSJON 2: LOBBY -->
@@ -54,27 +40,30 @@ Mekanikk: Hvis det er kamp, gi oss prosentvis sjanse for å lykkes."></textarea>
             <div style="text-align: center;">
                 <p>Romkode:</p>
                 <div id="room-code-display" style="font-size: 3rem; font-weight: bold; color: var(--secondary-color); letter-spacing: 5px;">----</div>
-                <div style="margin-top: 10px;">
-                    <span id="player-count">0</span> spillere tilkoblet
-                </div>
+                <div style="margin-top: 10px;"><span id="player-count">0</span> spillere</div>
             </div>
-            <!-- Skjult liste for å spare plass, vises ved behov -->
             <details style="margin-top: 10px; cursor: pointer; color: #888;">
                 <summary>Vis spillerliste</summary>
                 <ul id="player-list" style="list-style: none; padding: 10px; background: #1a1a1a;"></ul>
             </details>
+            <!-- NY KNAPP: VIS HISTORIKK -->
+            <button id="btn-view-history" class="btn btn-secondary" style="margin-top: 10px;">📜 Vis Historikk / Print</button>
         </div>
 
         <!-- SEKSJON 3: STORY DISPLAY -->
         <div id="game-panel" class="card hidden">
             <h2>Historien</h2>
             
-            <!-- Her kommer teksten fra Gemini -->
-            <div id="current-narrative" style="background: #252525; padding: 20px; border-radius: 5px; margin-bottom: 20px; line-height: 1.6;">
-                <em style="color: #888;">Genererer introduksjon...</em>
+            <!-- BILDE -->
+            <div id="scene-image-container" style="text-align: center; margin-bottom: 15px; display: none;">
+                <img id="scene-image" src="" alt="Scenebilde" style="max-width: 100%; border-radius: 8px; border: 2px solid #444;">
+                <p style="font-size: 0.7rem; color: #666; margin-top: 5px;">Generert av AI</p>
             </div>
 
-            <!-- Stemmeresultater -->
+            <div id="current-narrative" style="background: #252525; padding: 20px; border-radius: 5px; margin-bottom: 20px; line-height: 1.6;">
+                <em style="color: #888;">Genererer...</em>
+            </div>
+
             <h3>Stemmer</h3>
             <div id="voting-results" class="results-container"></div>
             
@@ -83,46 +72,44 @@ Mekanikk: Hvis det er kamp, gi oss prosentvis sjanse for å lykkes."></textarea>
             </div>
         </div>
 
-        <!-- SEKSJON 4: GM INPUT (Neste runde) -->
+        <!-- SEKSJON 4: GM INPUT -->
         <div id="gm-input-panel" class="card hidden">
             <h2>Game Master Input</h2>
-            <p style="font-size: 0.8rem; color: #aaa;">Juster hva som skjedde, eller legg til egne ideer før neste generering.</p>
-            
-            <label for="scenario-context">Kontekst for neste kapittel:</label>
+            <label>Kontekst for neste kapittel:</label>
             <textarea id="scenario-context" rows="3"></textarea>
-
             <div style="margin: 10px 0;">
                 <label style="display: inline-flex; align-items: center; cursor: pointer;">
                     <input type="checkbox" id="chk-custom-option" style="width: auto; margin: 0 10px 0 0;">
-                    Inkluder valg for "Eget forslag fra klassen"
+                    Inkluder valg for "Eget forslag"
                 </label>
             </div>
-
             <button id="btn-generate" class="btn">Generer Neste Kapittel</button>
         </div>
-
+        
         <!-- DEBUG LOG -->
         <div class="card">
-            <h3 style="cursor: pointer; font-size: 0.8rem;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">System Logg &#9660;</h3>
-            <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.7rem; color: #0f0; background: #000; padding: 10px; height: 100px; overflow-y: scroll;"></div>
+             <h3 style="cursor: pointer; font-size: 0.8rem;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">System Logg &#9660;</h3>
+             <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.7rem; color: #0f0; background: #000; padding: 10px; height: 100px; overflow-y: scroll;"></div>
         </div>
+    </div>
 
+    <!-- HISTORIKK MODAL (Vises over alt annet ved print) -->
+    <div id="history-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; z-index: 999; overflow-y: auto; padding: 20px; box-sizing: border-box;">
+        <div style="max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 40px; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h1>Historien så langt</h1>
+                <div>
+                    <button onclick="window.print()" class="btn" style="width: auto; display: inline-block;">Print / PDF</button>
+                    <button id="btn-close-history" class="btn btn-secondary" style="width: auto; display: inline-block;">Lukk</button>
+                </div>
+            </div>
+            <div id="history-content" style="font-family: 'Georgia', serif; line-height: 1.8; color: #e0e0e0;">
+                <!-- Historikk fylles inn her -->
+            </div>
+        </div>
     </div>
 
     <script src="host.js"></script>
-    <script>
-        function logToUi(msg) {
-            const logEl = document.getElementById('debug-log');
-            if(logEl) {
-                const entry = document.createElement('div');
-                entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-                logEl.appendChild(entry);
-                logEl.scrollTop = logEl.scrollHeight;
-            }
-            console.log(`[HOST] ${msg}`);
-        }
-        logToUi("host.html v12 lastet.");
-    </script>
 </body>
 </html>
-<!-- Version: #12 -->
+<!-- Version: #14 -->
