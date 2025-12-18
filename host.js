@@ -1,28 +1,27 @@
-/* Version: #13 */
+/* Version: #15 */
 // === KONFIGURASJON & TILSTAND ===
 let peer = null;
 let myRoomId = null;
 let connections = []; 
 let apiKey = localStorage.getItem('gemini_api_key') || '';
-let currentModel = localStorage.getItem('gemini_model') || 'gemini-1.5-flash-002';
+let currentModel = localStorage.getItem('gemini_model') || 'gemini-1.5-flash';
 
-// Spill-tilstand
-let gamePremise = ""; // Her lagres reglene/verdenen du skriver inn
-let currentScenario = {
-    narrative: "",
-    choices: []
-};
+let gamePremise = ""; 
+let currentScenario = { narrative: "", choices: [], imageUrl: "" };
 let currentVotes = {}; 
 let isVotingOpen = false;
-let narrativeHistory = [];
 let roundCounter = 0;
+
+// Strukturert historikk for printing: [{ type: 'NARRATIVE'|'CHOICE', text: '...', image: 'url' }]
+let fullGameLog = [];
+// Ren tekst-historikk for Gemini context window
+let narrativeContext = []; 
 
 // === DOM ELEMENTER ===
 const ui = {
     setupPanel: document.getElementById('setup-panel'),
     lobbyPanel: document.getElementById('lobby-panel'),
     gamePanel: document.getElementById('game-panel'),
-    resultsPanel: document.getElementById('voting-results'), // Merk: endret ID i host.html v12? Sjekker dette.
     gmInputPanel: document.getElementById('gm-input-panel'),
     
     apiKeyInput: document.getElementById('api-key'),
@@ -33,32 +32,34 @@ const ui = {
     roomCodeDisplay: document.getElementById('room-code-display'),
     playerCount: document.getElementById('player-count'),
     playerList: document.getElementById('player-list'),
+    btnViewHistory: document.getElementById('btn-view-history'),
     
     scenarioContextInput: document.getElementById('scenario-context'),
     chkCustomOption: document.getElementById('chk-custom-option'),
     btnGenerate: document.getElementById('btn-generate'),
     
     currentNarrative: document.getElementById('current-narrative'),
+    sceneImageContainer: document.getElementById('scene-image-container'),
+    sceneImage: document.getElementById('scene-image'),
     votingResults: document.getElementById('voting-results'),
     btnLockVoting: document.getElementById('btn-lock-voting'),
+    
+    historyModal: document.getElementById('history-modal'),
+    historyContent: document.getElementById('history-content'),
+    btnCloseHistory: document.getElementById('btn-close-history'),
     
     statusDot: document.getElementById('status-dot'),
     statusText: document.getElementById('status-text')
 };
 
-// === HJELPEFUNKSJONER ===
-
+// === LOGGING & TOOLS ===
 function log(msg, type = 'info') {
-    const timestamp = new Date().toLocaleTimeString();
     console.log(`[HOST] ${msg}`);
-    
     const logEl = document.getElementById('debug-log');
     if (logEl) {
         const entry = document.createElement('div');
-        entry.textContent = `[${timestamp}] ${msg}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
         if (type === 'error') entry.style.color = '#ff4444';
-        if (type === 'success') entry.style.color = '#00ff00';
-        if (type === 'warning') entry.style.color = '#ffff00';
         logEl.appendChild(entry);
         logEl.scrollTop = logEl.scrollHeight;
     }
@@ -67,9 +68,7 @@ function log(msg, type = 'info') {
 function generateShortId() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
     let result = '';
-    for (let i = 0; i < 4; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    for (let i = 0; i < 4; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
     return result;
 }
 
@@ -81,46 +80,33 @@ function showPanel(panelName) {
     
     if (panelName === 'setup') ui.setupPanel.classList.remove('hidden');
     if (panelName === 'game') {
-        ui.lobbyPanel.classList.remove('hidden'); // Alltid vis lobby info på topp
+        ui.lobbyPanel.classList.remove('hidden'); 
         ui.gamePanel.classList.remove('hidden'); 
         ui.gmInputPanel.classList.remove('hidden'); 
     }
 }
 
-// === PEERJS LOGIKK ===
-
+// === PEERJS ===
 function initializePeer() {
     const requestedId = generateShortId();
-    log(`Forsøker å opprette rom med ID: ${requestedId}...`);
-
+    log(`Oppretter rom: ${requestedId}...`);
     peer = new Peer(requestedId, { debug: 1 });
 
     peer.on('open', (id) => {
         myRoomId = id;
-        log(`Server startet! Rom-ID: ${id}`, 'success');
-        
+        log(`Server startet! ID: ${id}`, 'success');
         ui.roomCodeDisplay.textContent = id;
         ui.statusDot.className = 'status-indicator status-connected';
-        ui.statusText.textContent = `Online (ID: ${id})`;
-        
-        // Når vi starter, genererer vi introen automatisk
+        ui.statusText.textContent = `Online (${id})`;
         startNewRound(true);
         showPanel('game');
-        
         checkAvailableModels();
     });
 
-    peer.on('connection', (conn) => {
-        handleIncomingConnection(conn);
-    });
-
+    peer.on('connection', (conn) => handleIncomingConnection(conn));
     peer.on('error', (err) => {
-        log(`PeerJS Feil: ${err.type}`, 'error');
-        if (err.type === 'unavailable-id') {
-            setTimeout(initializePeer, 1000);
-        } else {
-            alert(`Tilkoblingsfeil: ${err.type}`);
-        }
+        if (err.type === 'unavailable-id') setTimeout(initializePeer, 1000);
+        else alert(`Feil: ${err.type}`);
     });
 }
 
@@ -140,8 +126,7 @@ function handleIncomingConnection(conn) {
 }
 
 function handleDataFromClient(peerId, data) {
-    if (data.type === 'VOTE') {
-        if (!isVotingOpen) return;
+    if (data.type === 'VOTE' && isVotingOpen) {
         currentVotes[peerId] = data.choiceId;
         const conn = connections.find(c => c.peer === peerId);
         if (conn) conn.metadata = { name: data.playerName };
@@ -164,92 +149,57 @@ function broadcast(type, data) {
     connections.forEach(conn => { if (conn.open) conn.send({ type, data }); });
 }
 
-// === GEMINI API LOGIKK ===
+// === GEMINI & IMAGE API ===
 
 async function checkAvailableModels() {
     if (!apiKey) return;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
     try {
-        const res = await fetch(url);
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
         const data = await res.json();
-        if (data.models) {
-            const validModels = data.models
-                .filter(m => m.supportedGenerationMethods.includes("generateContent"))
-                .map(m => m.name.replace("models/", ""));
-            log("Tilgjengelige modeller funnet.", 'success');
-        }
-    } catch (e) { log(`Kunne ikke hente modelliste: ${e.message}`, 'error'); }
+        if (data.models) log("Modell-liste hentet OK.", 'success');
+    } catch (e) { log(`Modell-sjekk feilet: ${e.message}`, 'error'); }
 }
 
 async function callGeminiApi(contextText, isIntro = false) {
     if (!apiKey) { alert("Mangler API Key!"); return; }
-
-    const modelToUse = ui.modelNameInput.value.trim() || "gemini-1.5-flash-002";
+    const modelToUse = ui.modelNameInput.value.trim() || "gemini-1.5-flash";
     localStorage.setItem('gemini_model', modelToUse); 
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
+    let promptHistory = narrativeContext.join("\n\n");
     
-    let promptHistory = narrativeHistory.join("\n\n");
-    
-    // === SYSTEM INSTRUCTION (DENNE STYRER ALT) ===
+    // Instruks som ber om 'image_prompt' i tillegg
     const systemInstruction = `
-        ROLLE:
-        Du er en Game Master (GM) for et tekstbasert rollespill.
+        ROLLE: Game Master.
+        VERDEN: "${gamePremise}"
         
-        VERDEN & REGLER (FRA GM):
-        "${gamePremise}"
-        
-        DIN OPPGAVE:
-        Skriv neste del av historien basert på spillernes valg.
-        
-        KRAV TIL OUTPUT (JSON):
-        Returner KUN gyldig JSON. Format:
+        OUTPUT FORMAT (JSON):
         {
-            "narrative": "Historietekst (bruk Markdown for fet tekst osv). Vær beskrivende.",
+            "narrative": "Historietekst (Markdown).",
+            "image_prompt": "Short visual description of the scene in English. Focus on lighting, mood, characters. No text in image.",
             "choices": [
-                { 
-                    "id": "A", 
-                    "text": "Beskrivelse av handling",
-                    "chance": "50% (Valgfritt, kun ved risiko)",
-                    "effect": "Høy skade / Død (Valgfritt, beskriv konsekvens)"
-                },
+                { "id": "A", "text": "Handling", "chance": "50% (Valgfritt)", "effect": "Konsekvens (Valgfritt)" },
                 ...
             ]
         }
         
-        VIKTIG OM MEKANIKK:
-        - Hvis en handling er farlig (angrep, hopping, stjeling), LEGG TIL "chance" (f.eks "40%") og "effect" (f.eks "Du kan bli oppdaget").
-        - Hvis handlingen er trygg, utelat disse feltene.
-        - Gi alltid 2-4 valg.
+        VIKTIG:
+        - Gi alltid 'image_prompt' (engelsk).
+        - Bruk 'chance'/'effect' ved farlige valg.
     `;
 
-    let userPrompt = "";
-    if (isIntro) {
-        userPrompt = `Start eventyret nå! Introduser verdenen og den første utfordringen.`;
-    } else {
-        userPrompt = `
-            HISTORIKK:
-            ${promptHistory}
-            
-            SISTE HENDELSE / GM INPUT: 
-            ${contextText}
-            
-            Skriv Kapittel ${roundCounter}. Flett inn konsekvensen av valget over.
-        `;
-    }
-
-    const payload = {
-        contents: [{ parts: [{ text: systemInstruction + "\n\n" + userPrompt }] }]
-    };
+    let userPrompt = isIntro 
+        ? `Start eventyret! Introduser verdenen og første scene.` 
+        : `HISTORIKK:\n${promptHistory}\n\nSISTE INPUT:\n${contextText}\n\nSkriv Kapittel ${roundCounter}.`;
 
     try {
         ui.btnGenerate.disabled = true;
-        ui.btnGenerate.textContent = "Forfatter historie...";
+        ui.btnGenerate.textContent = "Forfatter...";
         
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ contents: [{ parts: [{ text: systemInstruction + "\n\n" + userPrompt }] }] })
         });
 
         const data = await response.json();
@@ -259,11 +209,17 @@ async function callGeminiApi(contextText, isIntro = false) {
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         const scenarioObj = JSON.parse(rawText);
         
+        // Generer bilde URL hvis vi fikk en prompt
+        if (scenarioObj.image_prompt) {
+            // Vi bruker Pollinations.ai (gratis, URL-basert)
+            const encodedPrompt = encodeURIComponent(scenarioObj.image_prompt + " cinematic lighting, highly detailed, 8k, atmospheric");
+            scenarioObj.imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=576&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+        }
+        
         return scenarioObj;
 
     } catch (error) {
         log(`Feil: ${error.message}`, 'error');
-        alert(`Feil: ${error.message}`);
         return null;
     } finally {
         ui.btnGenerate.disabled = false;
@@ -275,9 +231,8 @@ async function callGeminiApi(contextText, isIntro = false) {
 
 async function startNewRound(isIntro = false) {
     const context = ui.scenarioContextInput.value;
-    
-    ui.currentNarrative.innerHTML = "<em style='color:#888'>Gemini skriver historien...</em>";
-    ui.votingResults.innerHTML = "";
+    ui.currentNarrative.innerHTML = "<em style='color:#888'>Genererer tekst og bilde...</em>";
+    ui.sceneImageContainer.style.display = 'none';
     
     const scenario = await callGeminiApi(context, isIntro);
     if (!scenario) return;
@@ -285,144 +240,142 @@ async function startNewRound(isIntro = false) {
     roundCounter++;
     currentScenario = scenario;
     
-    // === HÅNDTERING AV "EGET FORSLAG" ===
+    // Eget forslag logikk
     if (ui.chkCustomOption && ui.chkCustomOption.checked) {
-        currentScenario.choices.push({
-            id: "X",
-            text: "Eget forslag (Klassen diskuterer)",
-            effect: "GM bestemmer utfallet"
-        });
-        // Fjern haken etter bruk så den ikke henger på for alltid
+        currentScenario.choices.push({ id: "X", text: "Eget forslag (Klassen diskuterer)", effect: "GM bestemmer" });
         ui.chkCustomOption.checked = false;
     }
 
     currentVotes = {}; 
     isVotingOpen = true;
     
-    // Lagre narrativet
-    if (isIntro) {
-        narrativeHistory.push(`INTRO: ${scenario.narrative}`);
-    } else {
-        narrativeHistory.push(`KAPITTEL ${roundCounter}: ${scenario.narrative}`);
-    }
-    
-    if (narrativeHistory.length > 8) narrativeHistory.shift(); 
+    // Lagre til kontekst (Gemini minne)
+    let chapterTitle = isIntro ? "INTRO" : `KAPITTEL ${roundCounter}`;
+    narrativeContext.push(`${chapterTitle}: ${scenario.narrative}`);
+    if (narrativeContext.length > 8) narrativeContext.shift(); 
 
-    // Vis resultat
+    // Lagre til Full Logg (Print)
+    fullGameLog.push({ 
+        type: 'NARRATIVE', 
+        title: chapterTitle,
+        text: scenario.narrative,
+        image: scenario.imageUrl
+    });
+
+    // Oppdater UI
     ui.currentNarrative.innerHTML = marked.parse(scenario.narrative);
     ui.scenarioContextInput.value = ""; 
-    
-    ui.btnGenerate.textContent = "Oppdater Scenario (Reset)"; 
+    ui.btnGenerate.textContent = "Oppdater (Reset)"; 
     ui.btnGenerate.style.backgroundColor = ""; 
     
+    // Vis bilde
+    if (scenario.imageUrl) {
+        ui.sceneImage.src = scenario.imageUrl;
+        ui.sceneImageContainer.style.display = 'block';
+    }
+
     renderVotingResults();
     broadcast('SCENARIO', currentScenario);
     
-    // Scroll til historie
     ui.gamePanel.scrollIntoView({ behavior: 'smooth' });
 }
 
 function renderVotingResults() {
     ui.votingResults.innerHTML = '';
-    if (!currentScenario.choices || currentScenario.choices.length === 0) {
-        return;
-    }
+    if (!currentScenario.choices) return;
+    
     const totalVotes = Object.keys(currentVotes).length;
     const counts = {};
     currentScenario.choices.forEach(c => counts[c.id] = 0);
-    Object.values(currentVotes).forEach(choiceId => { if (counts[choiceId] !== undefined) counts[choiceId]++; });
+    Object.values(currentVotes).forEach(v => { if (counts[v] !== undefined) counts[v]++; });
 
-    currentScenario.choices.forEach(choice => {
-        const count = counts[choice.id] || 0;
-        const percentage = totalVotes > 0 ? (count / totalVotes) * 100 : 0;
-        
-        const wrapper = document.createElement('div');
-        wrapper.className = 'result-bar-wrapper';
-        wrapper.innerHTML = `
-            <div class="result-label"><span>${choice.id}: ${choice.text}</span><span>${count} (${Math.round(percentage)}%)</span></div>
-            <div class="result-track"><div class="result-fill" style="width: ${percentage}%"></div></div>
+    currentScenario.choices.forEach(c => {
+        const count = counts[c.id] || 0;
+        const pct = totalVotes > 0 ? (count / totalVotes) * 100 : 0;
+        const div = document.createElement('div');
+        div.className = 'result-bar-wrapper';
+        div.innerHTML = `
+            <div class="result-label"><span>${c.id}: ${c.text}</span><span>${count} (${Math.round(pct)}%)</span></div>
+            <div class="result-track"><div class="result-fill" style="width: ${pct}%"></div></div>
         `;
-        ui.votingResults.appendChild(wrapper);
+        ui.votingResults.appendChild(div);
     });
 }
 
 function lockVoting() {
     if (!isVotingOpen) return;
-    
     isVotingOpen = false;
     broadcast('VOTE_LOCKED', {});
     
+    // Finn vinner
     const counts = {};
     Object.values(currentVotes).forEach(v => counts[v] = (counts[v] || 0) + 1);
-    
-    let winnerId = null;
-    let maxVotes = -1;
-    for (const [id, count] of Object.entries(counts)) {
-        if (count > maxVotes) {
-            maxVotes = count;
-            winnerId = id;
-        }
-    }
+    let winnerId = null, max = -1;
+    for (const [id, c] of Object.entries(counts)) if (c > max) { max = c; winnerId = id; }
     
     if (winnerId) {
-        const winningChoice = currentScenario.choices.find(c => c.id === winnerId);
-        
-        if (winningChoice) {
-            let resultText = "";
+        const choice = currentScenario.choices.find(c => c.id === winnerId);
+        if (choice) {
+            let resText = choice.id === "X" ? "Klassen valgte eget forslag..." : `Spillerne valgte: "${choice.text}"`;
+            if (choice.chance) resText += ` (Sjanse: ${choice.chance})`;
             
-            // Spesialhåndtering hvis "Eget forslag" vant
-            if (winningChoice.id === "X") {
-                resultText = "SPILLERNE VALGTE EGET FORSLAG: [Skriv hva klassen ble enige om her...]";
-                log("Klassen valgte eget forslag!");
-            } else {
-                resultText = `SPILLERNE VALGTE: "${winningChoice.text}"`;
-                // Hvis det var sjanse involvert, kan GM legge til resultat av terningkast her
-                if (winningChoice.chance) {
-                    resultText += ` (Sjanse: ${winningChoice.chance}. Utfall: [Skriv om de lyktes eller feilet...])`;
-                }
-            }
-            
-            narrativeHistory.push(resultText); // Lagre valget i historikken
-            ui.scenarioContextInput.value = resultText;
+            narrativeContext.push(resText);
+            fullGameLog.push({ type: 'CHOICE', text: resText }); // Logg valget
+            ui.scenarioContextInput.value = resText;
         }
     } else {
-        ui.scenarioContextInput.value = "Ingen stemte. Tiden rant ut.";
+        ui.scenarioContextInput.value = "Tiden rant ut.";
     }
 
     ui.btnGenerate.textContent = ">>> GENERER NESTE KAPITTEL >>>";
     ui.btnGenerate.style.backgroundColor = "#00c853"; 
-    
-    // Scroll ned til input-feltet slik at GM ser det
     ui.gmInputPanel.scrollIntoView({ behavior: 'smooth' });
 }
 
+// === HISTORY / PRINT FUNKSJONALITET ===
+function showHistory() {
+    ui.historyContent.innerHTML = '';
+    
+    fullGameLog.forEach(entry => {
+        const div = document.createElement('div');
+        div.style.marginBottom = "30px";
+        div.style.borderBottom = "1px solid #333";
+        div.style.paddingBottom = "20px";
+        
+        if (entry.type === 'NARRATIVE') {
+            div.innerHTML = `
+                <h3 style="color: #bb86fc;">${entry.title}</h3>
+                ${entry.image ? `<img src="${entry.image}" style="max-width: 300px; float: right; margin-left: 20px; border-radius: 5px;">` : ''}
+                <div>${marked.parse(entry.text)}</div>
+                <div style="clear: both;"></div>
+            `;
+        } else if (entry.type === 'CHOICE') {
+            div.innerHTML = `<p style="font-weight: bold; color: #03dac6;">➔ ${entry.text}</p>`;
+        }
+        ui.historyContent.appendChild(div);
+    });
+    
+    ui.historyModal.classList.remove('hidden');
+}
+
+// === INIT ===
 document.addEventListener('DOMContentLoaded', () => {
     if (ui.apiKeyInput) ui.apiKeyInput.value = apiKey;
-    if (ui.modelNameInput) ui.modelNameInput.value = currentModel;
-
-    if (ui.btnStartHosting) {
-        ui.btnStartHosting.addEventListener('click', () => {
-            const key = ui.apiKeyInput.value.trim();
-            const model = ui.modelNameInput.value.trim();
-            const premise = ui.gamePremiseInput.value.trim();
-            
-            if (!key) { alert("Mangler API Key."); return; }
-            if (!premise) { alert("Du må skrive et premiss/intro for spillet."); return; }
-            
-            apiKey = key;
-            currentModel = model;
-            gamePremise = premise; // Lagre premisset
-            
-            localStorage.setItem('gemini_api_key', apiKey);
-            localStorage.setItem('gemini_model', currentModel);
-            
-            initializePeer();
-        });
-    }
+    
+    if (ui.btnStartHosting) ui.btnStartHosting.addEventListener('click', () => {
+        apiKey = ui.apiKeyInput.value.trim();
+        gamePremise = ui.gamePremiseInput.value.trim();
+        if (!apiKey || !gamePremise) { alert("Mangler nøkkel eller premiss!"); return; }
+        localStorage.setItem('gemini_api_key', apiKey);
+        initializePeer();
+    });
 
     if (ui.btnGenerate) ui.btnGenerate.addEventListener('click', () => startNewRound(false));
     if (ui.btnLockVoting) ui.btnLockVoting.addEventListener('click', lockVoting);
     
-    log("host.js v13 (Premise & Mechanics) klar.");
+    if (ui.btnViewHistory) ui.btnViewHistory.addEventListener('click', showHistory);
+    if (ui.btnCloseHistory) ui.btnCloseHistory.addEventListener('click', () => ui.historyModal.classList.add('hidden'));
+
+    log("host.js v15 klar.");
 });
-/* Version: #13 */
+/* Version: #15 */
