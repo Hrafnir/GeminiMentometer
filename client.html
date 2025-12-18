@@ -1,4 +1,4 @@
-<!-- Version: #5 -->
+<!-- Version: #7 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
@@ -6,13 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RPG Mentometer - SPILLER</title>
     <link rel="stylesheet" href="style.css">
-    <!-- PeerJS Library -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- Marked Library for Markdown parsing -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-
     <div class="container">
         <header>
             <h1>Spiller</h1>
@@ -20,74 +17,43 @@
                 <span class="status-indicator status-disconnected" id="status-dot"></span>
                 <span id="status-text">Frakoblet</span>
             </div>
-            <a href="index.html" style="color: #666; font-size: 0.8rem;">&larr; Tilbake</a>
         </header>
 
-        <!-- SEKSJON 1: LOGIN -->
+        <!-- LOGIN -->
         <div id="login-panel" class="card">
-            <h2>Bli med i spill</h2>
-            <p>Skriv inn koden du får av læreren (GM).</p>
-            
-            <label for="player-name">Ditt Navn:</label>
-            <input type="text" id="player-name" placeholder="F.eks. Ola">
-            
-            <label for="room-code">Romkode (4 bokstaver):</label>
-            <input type="text" id="room-code" placeholder="ABCD" style="text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">
-            
+            <h2>Bli med</h2>
+            <label>Ditt Navn:</label>
+            <input type="text" id="player-name" placeholder="Ola">
+            <label>Romkode:</label>
+            <input type="text" id="room-code" placeholder="ABCD" style="text-transform: uppercase; font-weight: bold;">
             <button id="btn-join" class="btn">Koble til</button>
         </div>
 
-        <!-- SEKSJON 2: VENTEMODUS -->
+        <!-- VENTING -->
         <div id="waiting-panel" class="card hidden" style="text-align: center;">
             <h2>Venter på GM...</h2>
             <div class="loader" style="margin: 20px auto; font-size: 2rem;">⏳</div>
-            <p>Du er koblet til! Følg med på storskjermen mens GM forbereder neste scenario.</p>
         </div>
 
-        <!-- SEKSJON 3: AVSMEKNING / SCENARIO -->
+        <!-- SPILL -->
         <div id="game-panel" class="card hidden">
-            <h2>Hva vil du gjøre?</h2>
-            
-            <!-- Narrativ tekst -->
-            <div id="scenario-text" style="margin-bottom: 20px; font-style: italic; color: #ccc;">
-                Historien vises her...
+            <!-- BILDE HOS KLIENT -->
+            <div id="client-image-container" style="margin-bottom: 15px; display: none;">
+                <img id="client-image" src="" style="width: 100%; border-radius: 8px;">
             </div>
 
-            <!-- Valg-knapper -->
-            <div id="choices-container">
-                <!-- Knapper genereres dynamisk her -->
-            </div>
-            
-            <div id="vote-status" style="margin-top: 15px; text-align: center; color: var(--secondary-color); font-weight: bold; opacity: 0;">
-                Stemme sendt!
-            </div>
+            <div id="scenario-text" style="margin-bottom: 20px; font-style: italic; color: #ccc;"></div>
+            <div id="choices-container"></div>
+            <div id="vote-status" style="margin-top: 15px; text-align: center; color: var(--secondary-color); font-weight: bold; opacity: 0;">Stemme sendt!</div>
         </div>
 
-        <!-- DEBUG LOG -->
+        <!-- DEBUG -->
         <div class="card" style="margin-top: 20px;">
-            <h3 style="cursor: pointer; font-size: 0.8rem;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">
-                Debug Logg &#9660;
-            </h3>
-            <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.7rem; color: #0f0; background: #000; padding: 10px; height: 100px; overflow-y: scroll;">
-                <div>[Client] Klar til start.</div>
-            </div>
+            <h3 style="cursor: pointer; font-size: 0.8rem;" onclick="document.getElementById('debug-log').classList.toggle('hidden')">Debug Logg &#9660;</h3>
+            <div id="debug-log" class="hidden" style="font-family: monospace; font-size: 0.7rem; color: #0f0; background: #000; padding: 10px; height: 100px; overflow-y: scroll;"></div>
         </div>
-
     </div>
-
     <script src="client.js"></script>
-    <script>
-        // Kjapp log-funksjon for init
-        function logToUi(msg) {
-            const logEl = document.getElementById('debug-log');
-            if(logEl) {
-                const entry = document.createElement('div');
-                entry.textContent = `[Init] ${msg}`;
-                logEl.appendChild(entry);
-            }
-        }
-        logToUi("client.html lastet.");
-    </script>
 </body>
 </html>
-<!-- Version: #5 -->
+<!-- Version: #7 -->
